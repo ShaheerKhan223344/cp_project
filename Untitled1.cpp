@@ -7,14 +7,17 @@
 
 using namespace std;
 
-const string DB_FILE = "parking_db.csv";
+// Configuration Constants
+const string DB_FILE = "blood_bank_db.csv";
 const string EXPECTED_KEY = "ACCESS_123";
 
+// 1. Hardware Authentication via ESP32 (Configured for COM6)
 bool authenticateWithESP32() {
-    HANDLE hSerial = CreateFile("\\\\.\\COM9", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    // Windows requires the absolute device path format for serial operations
+    HANDLE hSerial = CreateFile("\\\\.\\COM6", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     
     if (hSerial == INVALID_HANDLE_VALUE) {
-        cerr << "Error: Cannot open serial port." << endl;
+        cerr << "\n[Error] Cannot open serial port COM6. Ensure ESP32 is plugged in." << endl;
         return false;
     }
 
@@ -34,18 +37,18 @@ bool authenticateWithESP32() {
     char szBuff[11] = { 0 };
     DWORD bytesRead;
     
-    cout << "Checking hardware key via ESP32..." << endl;
-    Sleep(500);
+    cout << "Checking hardware key via ESP32 on COM6..." << endl;
+    Sleep(500); // Allow hardware delay for safe transmission
 
     if (ReadFile(hSerial, szBuff, 10, &bytesRead, NULL)) {
         string receivedKey(szBuff);
         CloseHandle(hSerial);
         
         if(receivedKey == EXPECTED_KEY) {
-            cout << "Authentication Successful! Key: " << receivedKey << endl;
+            cout << "Authentication Successful! Key Verified: " << receivedKey << endl;
             return true;
         } else {
-            cout << "Authentication Failed. Invalid Key: " << receivedKey << endl;
+            cout << "Authentication Failed. Invalid Token: " << receivedKey << endl;
             return false;
         }
     }
@@ -54,29 +57,34 @@ bool authenticateWithESP32() {
     return false;
 }
 
+// 2. Local Database Initialization File
 void initializeDatabase() {
     ifstream file(DB_FILE);
     if (!file.is_open()) {
         ofstream newFile(DB_FILE);
-        newFile << "SpotID,LicensePlate,Status\n";
+        // Clean structured data header for Blood Bank management
+        newFile << "DonorID,BloodType,Units,DonorName\n";
         newFile.close();
-        cout << "New database created with headers." << endl;
+        cout << "New blood bank database created with system headers." << endl;
     } else {
-        cout << "Database loaded successfully." << endl;
+        cout << "Blood bank database loaded successfully." << endl;
         file.close();
     }
 }
 
+// 3. Uniqueness Validator for Donor/Batch ID
 bool isUnique(string id) {
     ifstream file(DB_FILE);
     string line, currentID;
     
-    getline(file, line); 
+    getline(file, line); // Skip header parsing row
     
     while (getline(file, line)) {
         stringstream ss(line);
         getline(ss, currentID, ',');
-        cout << "Computer is currently looking at: [" << currentID << "]" << endl;
+        
+        // Debug display logging to match the requirement logic exactly
+        cout << "Computer is currently searching row index: [" << currentID << "]" << endl;
         if (currentID == id) {
             return false;
         }
@@ -84,14 +92,16 @@ bool isUnique(string id) {
     return true;
 }
 
+// 4. File-Appender for Records
 void appendRecord(string data) {
     ofstream file;
     file.open(DB_FILE, ios_base::app); 
     file << data << "\n";
     file.close();
-    cout << "Record added successfully!" << endl;
+    cout << "Blood record added to database successfully!" << endl;
 }
 
+// 5. Linear Search Routine by ID Key
 void searchByID(string id) {
     ifstream file(DB_FILE);
     string line, currentID;
@@ -102,18 +112,19 @@ void searchByID(string id) {
         getline(ss, currentID, ',');
         
         if (currentID == id) {
-            cout << "Data Retrieved: " << line << endl;
+            cout << "\n>>> Data Retrieved: " << line << endl;
             found = true;
             break;
         }
     }
     
     if (!found) {
-        cout << "Error: Record with ID " << id << " not found." << endl;
+        cout << "Error: Record with ID " << id << " not found in system." << endl;
     }
     file.close();
 }
 
+// 6. Database Update Engine (Read-Modify-Write via Temp swap)
 void updateRecord(string id, string newData) {
     ifstream fileIn(DB_FILE);
     ofstream fileOut("temp.csv");
@@ -139,62 +150,74 @@ void updateRecord(string id, string newData) {
     rename("temp.csv", DB_FILE.c_str());
 
     if(updated) {
-        cout << "Record updated successfully!" << endl;
+        cout << "Blood inventory database updated successfully!" << endl;
     } else {
-        cout << "Update failed: ID not found." << endl;
+        cout << "Update failed: Provided ID not found." << endl;
     }
 }
 
+// 7. Interactive Terminal Interface Loop
 int main() {
     initializeDatabase();
     
     int choice;
     while(true) {
-        cout << "\nSMART PARKING DBMS\n";
-        cout << "1. Add New Parking Spot\n";
-        cout << "2. Search Spot by ID\n";
-        cout << "3. Update Spot Data\n";
-        cout << "4. Exit\n";
-        cout << "Enter choice: ";
+        cout << "\n=========================================" << endl;
+        cout << "      BLOOD BANK SECURE ENGINE SYSTEM    " << endl;
+        cout << "=========================================" << endl;
+        cout << "1. Add New Blood Record / Batch\n";
+        cout << "2. Search Blood Record by ID\n";
+        cout << "3. Update Blood Stock Data\n";
+        cout << "4. Exit System\n";
+        cout << "Enter choices (1-4): ";
         cin >> choice;
 
         if(choice == 4) break;
 
+        // Validates hardware token transactionally prior to every major DB action
         if(!authenticateWithESP32()) {
-            cout << "Action Denied. Hardware key required.\n";
+            cout << "Action Denied. Valid hardware authorization required.\n";
             continue;
         }
 
-        string id, plate, status, data;
+        string id, bloodType, units, donorName, data;
         
         switch(choice) {
             case 1:
-                cout << "Enter Spot ID (e.g., P01): "; cin >> id;
+                cout << "Enter Donor/Batch ID (e.g., B01): "; cin >> id;
                 if(!isUnique(id)) {
-                    cout << "Error: Spot ID already exists!\n";
+                    cout << "Error: Entry with this ID already exists!\n";
                     break;
                 }
-                cout << "Enter License Plate: "; cin >> plate;
-                cout << "Enter Status (Occupied/Free): "; cin >> status;
-                data = id + "," + plate + "," + status;
+                cout << "Enter Blood Type (e.g., A+, O-, AB+): "; cin >> bloodType;
+                cout << "Enter Volume Units: "; cin >> units;
+                cout << "Enter Donor Name: "; 
+                cin.ignore(); // Clean residual character token out of input buffer
+                getline(cin, donorName);
+                
+                data = id + "," + bloodType + "," + units + "," + donorName;
                 appendRecord(data);
                 break;
                 
             case 2:
-                cout << "Enter Spot ID to Search: "; cin >> id;
+                cout << "Enter Record ID to Search: "; cin >> id;
                 searchByID(id);
                 break;
                 
             case 3:
-                cout << "Enter Spot ID to Update: "; cin >> id;
-                cout << "Enter New License Plate: "; cin >> plate;
-                cout << "Enter New Status (Occupied/Free): "; cin >> status;
-                data = id + "," + plate + "," + status;
+                cout << "Enter Record ID to Update: "; cin >> id;
+                cout << "Enter New Blood Type: "; cin >> bloodType;
+                cout << "Enter New Volume Units: "; cin >> units;
+                cout << "Enter New Donor Name: "; 
+                cin.ignore();
+                getline(cin, donorName);
+                
+                data = id + "," + bloodType + "," + units + "," + donorName;
                 updateRecord(id, data);
                 break;
                 
             default:
-                cout << "Invalid choice.\n";
+                cout << "Invalid runtime choice selected.\n";
         }
     }
     return 0;
