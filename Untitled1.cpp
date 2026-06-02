@@ -7,13 +7,10 @@
 
 using namespace std;
 
-// Configuration Constants
 const string DB_FILE = "blood_bank_db.csv";
 const string EXPECTED_KEY = "ACCESS_123";
 
-// 1. Hardware Authentication via ESP32 (Configured for COM6)
 bool authenticateWithESP32() {
-    // Windows requires the absolute device path format for serial operations
     HANDLE hSerial = CreateFile("\\\\.\\COM6", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     
     if (hSerial == INVALID_HANDLE_VALUE) {
@@ -38,7 +35,7 @@ bool authenticateWithESP32() {
     DWORD bytesRead;
     
     cout << "Checking hardware key via ESP32 on COM6..." << endl;
-    Sleep(500); // Allow hardware delay for safe transmission
+    Sleep(500);
 
     if (ReadFile(hSerial, szBuff, 10, &bytesRead, NULL)) {
         string receivedKey(szBuff);
@@ -57,12 +54,10 @@ bool authenticateWithESP32() {
     return false;
 }
 
-// 2. Local Database Initialization File
 void initializeDatabase() {
     ifstream file(DB_FILE);
     if (!file.is_open()) {
         ofstream newFile(DB_FILE);
-        // Clean structured data header for Blood Bank management
         newFile << "DonorID,BloodType,Units,DonorName\n";
         newFile.close();
         cout << "New blood bank database created with system headers." << endl;
@@ -72,18 +67,16 @@ void initializeDatabase() {
     }
 }
 
-// 3. Uniqueness Validator for Donor/Batch ID
 bool isUnique(string id) {
     ifstream file(DB_FILE);
     string line, currentID;
     
-    getline(file, line); // Skip header parsing row
+    getline(file, line);
     
     while (getline(file, line)) {
         stringstream ss(line);
         getline(ss, currentID, ',');
         
-        // Debug display logging to match the requirement logic exactly
         cout << "Computer is currently searching row index: [" << currentID << "]" << endl;
         if (currentID == id) {
             return false;
@@ -92,7 +85,6 @@ bool isUnique(string id) {
     return true;
 }
 
-// 4. File-Appender for Records
 void appendRecord(string data) {
     ofstream file;
     file.open(DB_FILE, ios_base::app); 
@@ -101,7 +93,6 @@ void appendRecord(string data) {
     cout << "Blood record added to database successfully!" << endl;
 }
 
-// 5. Linear Search Routine by ID Key
 void searchByID(string id) {
     ifstream file(DB_FILE);
     string line, currentID;
@@ -124,7 +115,6 @@ void searchByID(string id) {
     file.close();
 }
 
-// 6. Database Update Engine (Read-Modify-Write via Temp swap)
 void updateRecord(string id, string newData) {
     ifstream fileIn(DB_FILE);
     ofstream fileOut("temp.csv");
@@ -156,7 +146,6 @@ void updateRecord(string id, string newData) {
     }
 }
 
-// 7. Interactive Terminal Interface Loop
 int main() {
     initializeDatabase();
     
@@ -174,7 +163,6 @@ int main() {
 
         if(choice == 4) break;
 
-        // Validates hardware token transactionally prior to every major DB action
         if(!authenticateWithESP32()) {
             cout << "Action Denied. Valid hardware authorization required.\n";
             continue;
@@ -192,7 +180,7 @@ int main() {
                 cout << "Enter Blood Type (e.g., A+, O-, AB+): "; cin >> bloodType;
                 cout << "Enter Volume Units: "; cin >> units;
                 cout << "Enter Donor Name: "; 
-                cin.ignore(); // Clean residual character token out of input buffer
+                cin.ignore();
                 getline(cin, donorName);
                 
                 data = id + "," + bloodType + "," + units + "," + donorName;
